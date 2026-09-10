@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scout filters</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+/* Цвета берутся у Telegram: приложение открывается внутри него, и своя
+   палитра выглядела бы чужой вставкой. Запасные значения нужны для
+   случая, когда страницу открыли в обычном браузере — при отладке. */
+:root {
+  --bg:      var(--tg-theme-bg-color, #ffffff);
+  --bg2:     var(--tg-theme-secondary-bg-color, #f1f1f4);
+  --fg:      var(--tg-theme-text-color, #101014);
+  --fg2:     var(--tg-theme-hint-color, #77787d);
+  --link:    var(--tg-theme-link-color, #2f6fd0);
+  --btn:     var(--tg-theme-button-color, #2f6fd0);
+  --btn-fg:  var(--tg-theme-button-text-color, #ffffff);
+  --danger:  #d64545;
+  --warn:    #9a6b1a;
+  --warn-bg: rgba(154, 107, 26, .12);
+  --line:    color-mix(in srgb, var(--fg) 14%, transparent);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        system-ui, sans-serif;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.wrap { padding: 12px 14px 96px; max-width: 640px; margin: 0 auto; }
+
+h1 { font-size: 20px; margin: 4px 0 2px; font-weight: 600; }
+.sub { color: var(--fg2); font-size: 13px; margin: 0 0 14px; }
+
+/* ---- список фильтров ---- */
+.card {
+  background: var(--bg2); border-radius: 12px; padding: 12px 14px;
+  margin-bottom: 10px; display: flex; gap: 12px; align-items: flex-start;
+  cursor: pointer;
+}
+.card:active { opacity: .7; }
+.card .body { flex: 1; min-width: 0; }
+.card .name { font-weight: 600; font-size: 16px; }
+.card .name.off { color: var(--fg2); text-decoration: line-through; }
+.card .desc {
+  color: var(--fg2); font-size: 12.5px; margin-top: 3px;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.card .flag { font-size: 20px; line-height: 1; padding-top: 2px; }
+
+/* ---- предупреждения ---- */
+.warn {
+  background: var(--warn-bg); border-radius: 10px; padding: 10px 12px;
+  margin: 0 0 14px; font-size: 13px; color: var(--warn);
+}
+.warn b { display: block; margin-bottom: 5px; font-size: 12px;
+          text-transform: uppercase; letter-spacing: .05em; }
+.warn ul { margin: 0; padding-left: 17px; }
+.warn li { margin-bottom: 3px; }
+
+/* ---- форма ---- */
+.group { margin: 0 0 18px; }
+.group > .t {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--fg2); margin: 0 0 8px; font-weight: 600;
+}
+.field { margin-bottom: 13px; }
+.field > label { display: block; font-size: 13.5px; margin-bottom: 5px; }
+.field .why { color: var(--fg2); font-size: 12px; margin: 4px 0 0; }
+
+input[type=text], input[type=number], select, textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; font: inherit; background: var(--bg);
+  color: var(--fg); outline: none; appearance: none;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--btn); }
+select { background-image: none; }
+
+.row { display: flex; gap: 10px; }
+.row > * { flex: 1; min-width: 0; }
+
+/* ---- переключатели ---- */
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg button {
+  flex: 1; min-width: 84px; border: 1px solid var(--line); background: var(--bg);
+  color: var(--fg); border-radius: 9px; padding: 9px 8px; font: inherit;
+  font-size: 13.5px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] {
+  background: var(--btn); color: var(--btn-fg); border-color: var(--btn);
+}
+
+.check { display: flex; align-items: center; gap: 10px; }
+.check input { width: 20px; height: 20px; accent-color: var(--btn); }
+
+/* ---- поля-списки ---- */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 7px; }
+.chip {
+  background: var(--bg2); border-radius: 8px; padding: 5px 8px;
+  font-size: 13px; display: inline-flex; align-items: center; gap: 6px;
+}
+.chip button {
+  border: 0; background: transparent; color: var(--fg2); font-size: 15px;
+  line-height: 1; padding: 0 1px; cursor: pointer;
+}
+.hints { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.hints button {
+  border: 1px dashed var(--line); background: transparent; color: var(--fg2);
+  border-radius: 8px; padding: 5px 9px; font: inherit; font-size: 12.5px;
+  cursor: pointer;
+}
+.hints button:active { border-style: solid; color: var(--fg); }
+.hints .lead { color: var(--fg2); font-size: 12px; width: 100%; margin: 0; }
+
+/* ---- прочее ---- */
+.bar { display: flex; gap: 10px; margin: 20px 0 0; }
+.bar button {
+  flex: 1; border: 0; border-radius: 10px; padding: 13px; font: inherit;
+  font-weight: 600; cursor: pointer;
+}
+.ghost { background: var(--bg2); color: var(--fg); }
+.dangerbtn { background: transparent; color: var(--danger);
+             border: 1px solid var(--danger) !important; }
+.empty { color: var(--fg2); text-align: center; padding: 40px 20px; }
+.err { color: var(--danger); font-size: 13px; margin: 10px 0; }
+.hidden { display: none !important; }
+.spin { text-align: center; color: var(--fg2); padding: 30px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="spisok">
+    <h1>Filters</h1>
+    <p class="sub">Everything the scout watches for. Tap one to edit.</p>
+    <div id="karty"><div class="spin">Loading…</div></div>
+  </div>
+
+  <div id="redaktor" class="hidden"></div>
+
+</div>
+
+<script>
+'use strict';
+
+const TG = window.Telegram ? window.Telegram.WebApp : null;
+if (TG) { TG.ready(); TG.expand(); }
+
+// Подпись Telegram уходит заголовком на каждый запрос. Ею сервер и
+// опознаёт вошедшего: отдельного входа по паролю здесь нет и не нужно.
+const PODPIS = TG ? TG.initData : '';
+
+/* Режим без сервера.
+   Всё, что нужно форме, бот кладёт прямо в адрес кнопки: сам фильтр,
+   подсказки стоп-слов и список типов вещей. Сохранение уходит боту
+   через Telegram (sendData). Страница при этом НИ РАЗУ не обращается к
+   компьютеру владельца — потому и тоннель не нужен.
+
+   Включается сам: есть в адресе d= — значит работаем так. Нет —
+   значит страницу отдал наш сервер, и он же ответит на запросы. */
+const IZ_ADRESA = (function () {
+  const m = /[?&]d=([^&#]+)/.exec(location.search || '');
+  if (!m) return null;
+  try {
+    const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
+    const dop = '='.repeat((4 - b64.length % 4) % 4);
+    const baity = Uint8Array.from(atob(b64 + dop), c => c.charCodeAt(0));
+    // TextDecoder обязателен: в названиях фильтров бывает кириллица, а
+    // atob отдаёт байты, не текст.
+    return JSON.parse(new TextDecoder().decode(baity));
+  } catch (e) {
+    return null;
+  }
+})();
+const BEZ_SERVERA = IZ_ADRESA !== null;
+
+/* Типы вещей по отделам. Лежат ЗДЕСЬ, а не в адресе кнопки: список
+   одинаков для всех фильтров, а весил в адресе 626 байт из 1662 —
+   больше трети. Без него адрес вдвое короче, и туда помещается фильтр
+   с длинным списком моделей.
+
+   Цена — второй источник правды. Он сверяется с quality.RAZDELY
+   проверкой в check_miniapp.py: разойдись они, человек увидел бы тип,
+   которого бот не примет, или не увидел бы работающий. */
+const TIPY_PO_RAZDELAM = [
+  ["Одежда (Kleidung)",
+   ["outerwear", "knit", "tee", "shirt", "polo", "jeans", "trousers",
+    "shorts", "dress", "skirt", "suit", "jumpsuit", "sportswear", "swim",
+    "underwear", "sleepwear"]],
+  ["Обувь (Schuhe)", ["shoes"]],
+  ["Сумки (Taschen)", ["bag"]],
+  ["Аксессуары (Accessoires)", ["hat", "accessory"]],
+  ["Спорт (Sport)", ["sportgear"]],
+  ["Дом (Home)",
+   ["appliance", "cookware", "tableware", "furniture", "lighting", "decor"]],
+  ["Электроника (Elektronik)",
+   ["phone", "computer", "audio", "camera", "console"]],
+  ["Книги и медиа (Bücher)", ["book", "media"]],
+  ["Хобби и коллекции (Sammlerartikel)", ["collectible", "instrument"]],
+  ["Детское и питомцы (Kinder)", ["toy", "pet"]]
+];
+
+/* Названия отделов у бота русские, а приложение английское. Берём то,
+   что в скобках: это подлинные названия отделов Vinted — ровно те
+   слова, мимо которых человек только что прошёл в самом приложении
+   площадки. Переводить их значило бы отдалить от того, что он видел. */
+function imyaOtdela(nazvanie) {
+  const m = /\(([^)]+)\)/.exec(nazvanie);
+  return m ? m[1] : nazvanie;
+}
+
+let META = { razdely: [], cveta: [] };
+let TEKUSHCHIY = null;      // фильтр, открытый в редакторе
+
+async function api(put, nastroyki) {
+  const o = Object.assign({ headers: {} }, nastroyki || {});
+  o.headers['X-Telegram-Init-Data'] = PODPIS;
+  if (o.body) o.headers['Content-Type'] = 'application/json';
+  const r = await fetch(put, o);
+  if (r.status === 401) {
+    throw new Error('Not authorised. Send the bot your password first.');
+  }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+
+function el(tag, klass, tekst) {
+  const e = document.createElement(tag);
+  if (klass) e.className = klass;
+  if (tekst !== undefined) e.textContent = tekst;
+  return e;
+}
+
+function pokazatOshibku(gde, e) {
+  const d = el('div', 'err', String(e.message || e));
+  gde.prepend(d);
+}
+
+// ---- список ---------------------------------------------------------
+
+async function otkrytSpisok() {
+  document.getElementById('redaktor').classList.add('hidden');
+  document.getElementById('spisok').classList.remove('hidden');
+  if (TG) { TG.MainButton.setText('New filter'); TG.MainButton.show(); }
+  const gde = document.getElementById('karty');
+  gde.innerHTML = '<div class="spin">Loading…</div>';
+  try {
+    const d = await api('/api/filters');
+    gde.innerHTML = '';
+    if (!d.filters.length) {
+      gde.append(el('div', 'empty', 'No filters yet. Tap “New filter”.'));
+      return;
+    }
+    d.filters.forEach(f => gde.append(kartochka(f)));
+  } catch (e) {
+    gde.innerHTML = '';
+    pokazatOshibku(gde, e);
+  }
+}
+
+function kartochka(f) {
+  const c = el('div', 'card');
+  c.onclick = () => otkrytRedaktor(f.uid);
+  // Значок слева — состояние. Предупреждение важнее выключенности:
+  // выключенный фильтр не вредит, а дырявый включённый льёт мусор.
+  const flag = el('div', 'flag',
+    f.slabosti && f.slabosti.length ? '⚠️' : (f.enabled ? '🟢' : '⚪️'));
+  const body = el('div', 'body');
+  const name = el('div', 'name' + (f.enabled ? '' : ' off'), f.entry_id);
+  body.append(name, el('div', 'desc', f.svodka || ''));
+  c.append(flag, body);
+  return c;
+}
+
+// ---- редактор -------------------------------------------------------
+
+function pole(podpis, upravlenie, pochemu) {
+  const f = el('div', 'field');
+  if (podpis) f.append(el('label', null, podpis));
+  f.append(upravlenie);
+  if (pochemu) f.append(el('p', 'why', pochemu));
+  return f;
+}
+
+function gruppa(nazvanie) {
+  const g = el('div', 'group');
+  g.append(el('div', 't', nazvanie));
+  return g;
+}
+
+function vvod(tip, znachenie, atributy) {
+  const i = el('input');
+  i.type = tip;
+  i.value = (znachenie === null || znachenie === undefined) ? '' : znachenie;
+  Object.assign(i, atributy || {});
+  return i;
+}
+
+/* Список значений: показывается фишками, добавляется по запятой или
+   Enter. Одна строка на несколько значений — то, чего мастеру в чате
+   не хватало больше всего: там каждое слово шло отдельным сообщением. */
+function spisok(znacheniya, mesto) {
+  const obertka = el('div');
+  const chips = el('div', 'chips');
+  const vvodPolya = vvod('text', '', { placeholder: mesto || 'Add and press Enter' });
+  let dannye = (znacheniya || []).slice();
+
+  function pererisovat() {
+    chips.innerHTML = '';
+    dannye.forEach((v, i) => {
+      const c = el('span', 'chip', v);
+      const x = el('button', null, '×');
+      x.type = 'button';
+      x.onclick = () => { dannye.splice(i, 1); pererisovat(); };
+      c.append(x);
+      chips.append(c);
+    });
+  }
+  function dobavit(tekst) {
+    // Запятая разделяет: люди вставляют готовые списки из заметок.
+    String(tekst).split(',').forEach(kusok => {
+      const v = kusok.trim();
+      if (v && dannye.indexOf(v) === -1) dannye.push(v);
+    });
+    pererisovat();
+  }
+  vvodPolya.onkeydown = ev => {
+    if (ev.key === 'Enter' || ev.key === ',') {
+      ev.preventDefault();
+      dobavit(vvodPolya.value);
+      vvodPolya.value = '';
+    }
+  };
+  // Уход из поля тоже добавляет: иначе набранное и не подтверждённое
+  // Enter'ом молча пропадает при сохранении.
+  vvodPolya.onblur = () => { if (vvodPolya.value.trim()) { dobavit(vvodPolya.value); vvodPolya.value = ''; } };
+
+  pererisovat();
+  obertka.append(chips, vvodPolya);
+  obertka.znachenie = () => dannye;
+  obertka.dobavit = dobavit;
+  return obertka;
+}
+
+function pereklyuchatel(varianty, tekushchee) {
+  const s = el('div', 'seg');
+  let vybrano = tekushchee || '';
+  varianty.forEach(([znachenie, podpis]) => {
+    const b = el('button', null, podpis);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(znachenie === vybrano));
+    b.onclick = () => {
+      vybrano = znachenie;
+      Array.from(s.children).forEach(x =>
+        x.setAttribute('aria-pressed', String(x === b)));
+    };
+    s.append(b);
+  });
+  s.znachenie = () => vybrano;
+  return s;
+}
+
+async function otkrytRedaktor(uid) {
+  const gde = document.getElementById('redaktor');
+  document.getElementById('spisok').classList.add('hidden');
+  gde.classList.remove('hidden');
+  gde.innerHTML = '<div class="spin">Loading…</div>';
+  try {
+    TEKUSHCHIY = uid ? await api('/api/filter/' + uid) : pustoy();
+    narisovatRedaktor(gde);
+  } catch (e) {
+    gde.innerHTML = '';
+    pokazatOshibku(gde, e);
+  }
+}
+
+function pustoy() {
+  return {
+    uid: null, entry_id: '', enabled: true, brand: [], model_kw: [],
+    must_kw: [], any_kw: [], exclude_kw: [], sizes: [], colors: [],
+    product: '', gender: '', rework: '', price_mode: '',
+    max_price: 0, min_price: 0, median_eur: 0, alert_ratio: null,
+    use_typos: false, catalog_id: null, slabosti: []
+  };
+}
+
+function narisovatRedaktor(gde) {
+  const f = TEKUSHCHIY;
+  gde.innerHTML = '';
+  const P = {};   // сюда складываются элементы, чтобы забрать значения
+
+  gde.append(el('h1', null, f.uid ? f.entry_id : 'New filter'));
+  gde.append(el('p', 'sub', f.uid
+    ? 'Changes apply to the next scan.'
+    : 'Give it a name and say what to look for.'));
+
+  if (f.slabosti && f.slabosti.length) {
+    const w = el('div', 'warn');
+    w.append(el('b', null, 'Worth fixing'));
+    const ul = el('ul');
+    f.slabosti.forEach(s => ul.append(el('li', null, s)));
+    w.append(ul);
+    gde.append(w);
+  }
+
+  // --- 1. Что это ---
+  const g1 = gruppa('The filter');
+  P.entry_id = vvod('text', f.entry_id, { placeholder: 'carhartt-detroit', maxLength: 40 });
+  g1.append(pole('Name', P.entry_id, 'Shows up in alerts and in /stats.'));
+  const vkl = el('div', 'check');
+  P.enabled = vvod('checkbox', '', {});
+  P.enabled.checked = !!f.enabled;
+  vkl.append(P.enabled, el('span', null, 'Active — the scout watches it'));
+  g1.append(pole('', vkl));
+  gde.append(g1);
+
+  // --- 2. Что ищем ---
+  const g2 = gruppa('What to look for');
+  P.brand = spisok(f.brand,
+    BEZ_SERVERA ? 'carhartt, arcteryx' : 'Type 3 letters to search Vinted');
+  // Пояснение разное, потому что и работает по-разному: с сервером
+  // написание берётся у площадки прямо в поле, без него — сверяется
+  // ботом после сохранения. Обещать первое, когда работает второе,
+  // значит заставить человека ждать подсказку, которой не будет.
+  g2.append(pole('Brands', P.brand, BEZ_SERVERA
+    ? 'Type the brand as you know it. After you save, the bot checks the ' +
+      'spelling against Vinted and offers a correction if it differs.'
+    : 'Spelling is taken from Vinted itself. Several brands are allowed.'));
+  podklyuchitPoiskBrenda(P.brand);
+
+  P.model_kw = spisok(f.model_kw, 'bedale, beaufort');
+  g2.append(pole('Models', P.model_kw,
+    'The strongest field. While it is filled, a listing without one of ' +
+    'these words in the title never becomes an alert.'));
+
+  P.product = el('select');
+  P.product.append(new Option('— any —', ''));
+  META.razdely.forEach(r => {
+    const g = document.createElement('optgroup');
+    g.label = imyaOtdela(r.nazvanie);
+    r.tipy.forEach(t => g.append(new Option(t, t, false, t === f.product)));
+    P.product.append(g);
+  });
+  P.product.value = f.product || '';
+  g2.append(pole('Kind of thing', P.product,
+    'Keeps a hat and a patch out of a filter about jackets.'));
+
+  P.gender = pereklyuchatel(
+    [['', 'Any'], ['m', 'Men'], ['f', 'Women']], f.gender);
+  g2.append(pole('Made for', P.gender,
+    'Cuts a women’s size grid out of a men’s filter.'));
+
+  P.rework = pereklyuchatel(
+    [['', 'Any'], ['only', 'Rework only'], ['no', 'No rework']], f.rework);
+  g2.append(pole('Reworked pieces', P.rework,
+    'Rebuilt garments have their own market and their own price.'));
+  gde.append(g2);
+
+  // --- 3. Слова ---
+  const g3 = gruppa('Words');
+  P.must_kw = spisok(f.must_kw, 'All of these must appear');
+  g3.append(pole('Required', P.must_kw, 'Every one of them must be in the title.'));
+
+  P.any_kw = spisok(f.any_kw, 'At least one of these');
+  g3.append(pole('Any of', P.any_kw, 'Ignored while Models is filled.'));
+
+  P.exclude_kw = spisok(f.exclude_kw, 'kinder, damen, fake');
+  const podskazkiMesto = el('div', 'hints');
+  g3.append(pole('Stop words', P.exclude_kw,
+    'Matched inside words, so “leder” also catches “kunstleder”.'));
+  g3.append(podskazkiMesto);
+  gde.append(g3);
+  if (f.entry_id) zagruzitPodskazki(f.entry_id, P.exclude_kw, podskazkiMesto);
+
+  // --- 4. Деньги ---
+  const g4 = gruppa('Price');
+  P.price_mode = pereklyuchatel(
+    [['', 'Strictest'], ['index', 'Index decides'], ['manual', 'My price']],
+    f.price_mode);
+  g4.append(pole('Who decides what is expensive', P.price_mode,
+    'The index takes the lower quartile of the market, subtracts fees and ' +
+    'shipping and keeps updating itself. Your own number never gets raised ' +
+    'by it — the smaller of the two wins.'));
+
+  const ceny = el('div', 'row');
+  P.max_price = vvod('number', f.max_price || '', { placeholder: '60', min: 0, step: 1 });
+  P.min_price = vvod('number', f.min_price || '', { placeholder: '0', min: 0, step: 1 });
+  ceny.append(pole('Up to, €', P.max_price), pole('From, €', P.min_price));
+  g4.append(ceny);
+  g4.append(el('p', 'why',
+    'A lower bound is not fussiness: nobody sells a real Barbour for 5 € — ' +
+    'that price buys a patch, a dust bag, or bait for a chat off-platform.'));
+
+  const med = el('div', 'row');
+  P.median_eur = vvod('number', f.median_eur || '', { placeholder: '0', min: 0, step: 1 });
+  P.alert_ratio = vvod('number', f.alert_ratio === null ? '' : f.alert_ratio,
+    { placeholder: '0.35', min: 0, max: 1, step: 0.05 });
+  med.append(pole('Median sold, €', P.median_eur), pole('Alert at', P.alert_ratio));
+  g4.append(med);
+  g4.append(el('p', 'why',
+    'With a median set, an alert needs the listing to be cheap relative to ' +
+    'the market, not merely under your ceiling. 0.35 means 35% of the median.'));
+  gde.append(g4);
+
+  // --- 5. Мелочи ---
+  const g5 = gruppa('Details');
+  P.sizes = spisok(f.sizes, 'M, L, 32/32');
+  g5.append(pole('Sizes', P.sizes, 'Empty means any. A listing with no size stated still passes.'));
+
+  P.colors = spisok(f.colors, 'black, navy');
+  g5.append(pole('Colours', P.colors, 'Named in the title. Colour from the photo only confirms, never rejects.'));
+
+  const op = el('div', 'check');
+  P.use_typos = vvod('checkbox', '', {});
+  P.use_typos.checked = !!f.use_typos;
+  op.append(P.use_typos, el('span', null, 'Search misspellings too'));
+  g5.append(pole('', op));
+  gde.append(g5);
+
+  // --- кнопки ---
+  const bar = el('div', 'bar');
+  const nazad = el('button', 'ghost', BEZ_SERVERA ? 'Close' : 'Back');
+  nazad.type = 'button';
+  // Без сервера возвращаться некуда: списка в приложении нет, он
+  // остался кнопками в чате.
+  nazad.onclick = BEZ_SERVERA ? () => TG && TG.close() : otkrytSpisok;
+  bar.append(nazad);
+  if (f.uid) {
+    const del = el('button', 'ghost dangerbtn', 'Delete');
+    del.type = 'button';
+    del.onclick = () => udalit(f.uid, f.entry_id);
+    bar.append(del);
+  }
+  gde.append(bar);
+
+  gde.P = P;
+
+  if (TG) {
+    TG.MainButton.setText(f.uid ? 'Save' : 'Create');
+    TG.MainButton.show();
+  }
+}
+
+function sobrat(P) {
+  return {
+    uid: TEKUSHCHIY.uid,
+    entry_id: P.entry_id.value.trim(),
+    enabled: P.enabled.checked,
+    brand: P.brand.znachenie(),
+    model_kw: P.model_kw.znachenie(),
+    must_kw: P.must_kw.znachenie(),
+    any_kw: P.any_kw.znachenie(),
+    exclude_kw: P.exclude_kw.znachenie(),
+    sizes: P.sizes.znachenie(),
+    colors: P.colors.znachenie(),
+    product: P.product.value,
+    gender: P.gender.znachenie(),
+    rework: P.rework.znachenie(),
+    price_mode: P.price_mode.znachenie(),
+    max_price: P.max_price.value || 0,
+    min_price: P.min_price.value || 0,
+    median_eur: P.median_eur.value || 0,
+    alert_ratio: P.alert_ratio.value === '' ? null : P.alert_ratio.value,
+    use_typos: P.use_typos.checked,
+    catalog_id: TEKUSHCHIY.catalog_id
+  };
+}
+
+async function sohranit() {
+  const gde = document.getElementById('redaktor');
+  if (!gde.P) return;
+  const telo = sobrat(gde.P);
+  if (!telo.entry_id) {
+    if (TG) TG.showAlert('The filter needs a name.');
+    return;
+  }
+  if (BEZ_SERVERA) {
+    // Отдаём боту через Telegram и закрываемся: ответ придёт
+    // сообщением в чат, и держать форму открытой ради него незачем.
+    TG.sendData(JSON.stringify(telo));
+    TG.close();
+    return;
+  }
+
+  if (TG) TG.MainButton.showProgress();
+  try {
+    await api('/api/filter', { method: 'POST', body: JSON.stringify(telo) });
+    if (TG) { TG.MainButton.hideProgress(); TG.HapticFeedback.notificationOccurred('success'); }
+    otkrytSpisok();
+  } catch (e) {
+    if (TG) { TG.MainButton.hideProgress(); TG.showAlert(String(e.message || e)); }
+    else pokazatOshibku(gde, e);
+  }
+}
+
+function udalit(uid, imya) {
+  const sprosit = (soglasen) => {
+    if (!soglasen) return;
+    if (BEZ_SERVERA) {
+      TG.sendData(JSON.stringify({ delete: true, uid: uid }));
+      TG.close();
+      return;
+    }
+    api('/api/filter/delete', { method: 'POST', body: JSON.stringify({ uid }) })
+      .then(otkrytSpisok)
+      .catch(e => { if (TG) TG.showAlert(String(e.message || e)); });
+  };
+  const vopros = 'Delete “' + imya + '”? This cannot be undone.';
+  if (TG && TG.showConfirm) TG.showConfirm(vopros, sprosit);
+  else sprosit(window.confirm(vopros));
+}
+
+// ---- подсказки ------------------------------------------------------
+
+async function zagruzitPodskazki(imya, kuda, mesto) {
+  try {
+    // Без сервера подсказки уже лежат в адресе: бот посчитал их до
+    // того, как открыл форму.
+    const d = BEZ_SERVERA
+      ? { stop: (IZ_ADRESA.h || []).map(s => ({ slovo: s, skolko: 0 })), cennoe: [] }
+      : await api('/api/hints?entry_id=' + encodeURIComponent(imya));
+    mesto.innerHTML = '';
+    if (d.stop && d.stop.length) {
+      mesto.append(el('p', 'lead',
+        'Words this filter never asked for but keeps receiving — tap to add:'));
+      d.stop.forEach(x => {
+        const b = el('button', null,
+          x.slovo + (x.skolko ? ' · ' + x.skolko : ''));
+        b.type = 'button';
+        b.onclick = () => { kuda.dobavit(x.slovo); b.remove(); };
+        mesto.append(b);
+      });
+    }
+    // Слова, которые выбрасывать НЕ надо, названы отдельно: реворк
+    // приходит потоком, но у него своя цена, а не мусорная.
+    if (d.cennoe && d.cennoe.length) {
+      const p = el('p', 'lead',
+        'Also frequent, but do not block these — reworked pieces are worth ' +
+        'money: ' + d.cennoe.map(x => x.slovo).join(', ') + '.');
+      mesto.append(p);
+    }
+  } catch (e) {
+    // Подсказки — приятное дополнение. Не собрались — форма работает.
+    mesto.innerHTML = '';
+  }
+}
+
+function podklyuchitPoiskBrenda(spisokBrendov) {
+  const vvodPolya = spisokBrendov.querySelector('input');
+  const mesto = el('div', 'hints');
+  spisokBrendov.append(mesto);
+
+  // Без сервера живого поиска нет: он ходит на Vinted, а туда нужен
+  // работающий сервер. Про это сказано в пояснении под самим полем,
+  // второй раз повторять незачем.
+  if (BEZ_SERVERA) return;
+  let taymer = null;
+  vvodPolya.addEventListener('input', () => {
+    clearTimeout(taymer);
+    const kusok = vvodPolya.value.trim();
+    if (kusok.length < 3) { mesto.innerHTML = ''; return; }
+    // Пауза обязательна: иначе запрос уходит на каждую букву, а он
+    // ходит на Vinted, а не к нам.
+    taymer = setTimeout(async () => {
+      try {
+        const d = await api('/api/brands?q=' + encodeURIComponent(kusok));
+        mesto.innerHTML = '';
+        (d.brands || []).forEach(b => {
+          const btn = el('button', null,
+            b.title + (b.count ? ' · ' + b.count : ''));
+          btn.type = 'button';
+          btn.onclick = () => {
+            spisokBrendov.dobavit(b.title);
+            vvodPolya.value = '';
+            mesto.innerHTML = '';
+          };
+          mesto.append(btn);
+        });
+      } catch (e) { mesto.innerHTML = ''; }
+    }, 350);
+  });
+}
+
+// ---- запуск ---------------------------------------------------------
+
+if (TG) {
+  TG.MainButton.onClick(() => {
+    const vRedaktore = !document.getElementById('redaktor').classList.contains('hidden');
+    if (vRedaktore) sohranit(); else otkrytRedaktor(null);
+  });
+  TG.BackButton.onClick(otkrytSpisok);
+}
+
+(async function () {
+  if (BEZ_SERVERA) {
+    // Список фильтров показывать не надо: его показал бот кнопками, и
+    // сюда пришли уже за конкретным. Открываем сразу редактор.
+    META = { razdely: TIPY_PO_RAZDELAM.map(([nazvanie, tipy]) =>
+                       ({ nazvanie: nazvanie, tipy: tipy })),
+             cveta: [] };
+    const f = IZ_ADRESA.f || {};
+    TEKUSHCHIY = Object.assign(pustoy(), f);
+    const gde = document.getElementById('redaktor');
+    document.getElementById('spisok').classList.add('hidden');
+    gde.classList.remove('hidden');
+    narisovatRedaktor(gde);
+    // Кнопки «назад к списку» здесь нет: списка нет. Уводит обратно в
+    // чат родная кнопка Telegram.
+    if (TG) TG.BackButton.hide();
+    return;
+  }
+  try { META = await api('/api/meta'); } catch (e) { /* списки останутся пустыми */ }
+  otkrytSpisok();
+})();
+</script>
+</body>
+</html>
