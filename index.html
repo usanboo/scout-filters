@@ -478,13 +478,19 @@ function narisovatRedaktor(gde) {
 
   // --- 4. Деньги ---
   const g4 = gruppa('Price');
+  /* Двa варианта, а не три. Третий назывался «Index decides» и делал
+     ровно то же, что «Strictest»: ваш бюджет индекс не расширяет
+     никогда, поэтому из двух всё равно бралось меньшее. Проверено
+     10.09.2026 — три режима давали два разных потолка. Вариант,
+     который ничего не меняет, хуже отсутствующего: его выбирают и
+     думают, что что-то настроили. */
   P.price_mode = pereklyuchatel(
-    [['', 'Strictest'], ['index', 'Index decides'], ['manual', 'My price']],
-    f.price_mode);
+    [['', 'Strictest'], ['manual', 'My price only']], f.price_mode);
   g4.append(pole('Who decides what is expensive', P.price_mode,
-    'The index takes the lower quartile of the market, subtracts fees and ' +
-    'shipping and keeps updating itself. Your own number never gets raised ' +
-    'by it — the smaller of the two wins.'));
+    'Strictest takes the LOWER of your ceiling and the index’s. The index ' +
+    'works out its own from the market — lower quartile, minus platform fee ' +
+    'and shipping, eBay against Vinted — and keeps updating itself. Where it ' +
+    'does not know the item, your price stands.'));
 
   const ceny = el('div', 'row');
   P.max_price = vvod('number', f.max_price || '', { placeholder: '60', min: 0, step: 1 });
