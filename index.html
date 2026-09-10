@@ -427,7 +427,7 @@ function pustoy() {
     uid: null, entry_id: '', enabled: true, brand: [], model_kw: [],
     must_kw: [], any_kw: [], exclude_kw: [], sizes: [], colors: [],
     product: '', gender: '', rework: '', price_mode: '', material: [],
-    max_price: 0, min_price: 0, median_eur: 0, alert_ratio: null,
+    max_price: 0, min_price: 0, median_eur: 0, min_zapas: 0, alert_ratio: null,
     use_typos: false, catalog_id: null, slabosti: []
   };
 }
@@ -554,6 +554,13 @@ function narisovatRedaktor(gde) {
   g4.append(el('p', 'why',
     'With a median set, an alert needs the listing to be cheap relative to ' +
     'the market, not merely under your ceiling. 0.35 means 35% of the median.'));
+
+  P.min_zapas = vvod('number', f.min_zapas || '', { placeholder: '0', min: 0, step: 1 });
+  g4.append(pole('Minimum margin, €', P.min_zapas,
+    'Margin is resale at the market’s lower quartile minus the listing price ' +
+    'and shipping. Not profit — only if the item is what it claims and sells ' +
+    'at that price. 0 means do not check. Where the index does not know the ' +
+    'item, this is not applied: not knowing is not a no.'));
   gde.append(g4);
 
   // --- 5. Мелочи ---
@@ -565,7 +572,7 @@ function narisovatRedaktor(gde) {
   g5.append(pole('Fabric', P.material,
     'Pick as many as you like — any one of them counts. Known only from ' +
     'the title: the marketplace does not give us the description, and ' +
-    'sellers name the fabric in about 12% of listings. A listing that ' +
+    'sellers name the fabric in about 10% of listings. A listing that ' +
     'says nothing about fabric will NOT come through. Narrower, but ' +
     'nothing guessed at.'));
 
@@ -631,6 +638,7 @@ function sobrat(P) {
     max_price: P.max_price.value || 0,
     min_price: P.min_price.value || 0,
     median_eur: P.median_eur.value || 0,
+    min_zapas: P.min_zapas.value || 0,
     alert_ratio: P.alert_ratio.value === '' ? null : P.alert_ratio.value,
     use_typos: P.use_typos.checked,
     catalog_id: TEKUSHCHIY.catalog_id
