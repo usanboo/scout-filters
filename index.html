@@ -203,6 +203,17 @@ const TIPY_PO_RAZDELAM = [
   ["Детское и питомцы (Kinder)", ["toy", "pet"]]
 ];
 
+/* Составы. Здесь, а не в адресе: список общий для всех фильтров.
+   Сверяется с quality.MATERIALY проверкой в check_miniapp.py. */
+const SOSTAVY = [
+  ["wool", "Wool"], ["cashmere", "Cashmere"], ["leather", "Leather"],
+  ["suede", "Suede"], ["cotton", "Cotton"], ["linen", "Linen"],
+  ["silk", "Silk"], ["denim", "Denim"], ["corduroy", "Corduroy"],
+  ["velvet", "Velvet"], ["fleece", "Fleece"], ["down", "Down"],
+  ["goretex", "Gore-Tex"], ["nylon", "Nylon"],
+  ["polyester", "Polyester"], ["viscose", "Viscose"]
+];
+
 /* Названия отделов у бота русские, а приложение английское. Берём то,
    что в скобках: это подлинные названия отделов Vinted — ровно те
    слова, мимо которых человек только что прошёл в самом приложении
@@ -341,9 +352,42 @@ function spisok(znacheniya, mesto) {
 
   pererisovat();
   obertka.append(chips, vvodPolya);
+  /* Забрать набранное, но ещё не подтверждённое. Вызывается перед
+     сохранением.
+
+     Одного onblur мало. Человек набирает «501» и сразу жмёт кнопку
+     Telegram внизу экрана — она не часть страницы, и уход из поля может
+     не успеть. Набранное пропадало молча, а бот отвечал «модели не
+     заданы»: ровно то, на что жаловались 10.09.2026. */
+  obertka.zafiksirovat = () => {
+    if (vvodPolya.value.trim()) {
+      dobavit(vvodPolya.value);
+      vvodPolya.value = '';
+    }
+  };
   obertka.znachenie = () => dannye;
   obertka.dobavit = dobavit;
   return obertka;
+}
+
+/* Множественный выбор — как фильтр материала у самой Vinted: нажал
+   несколько, все и учитываются. Отличается от pereklyuchatel только
+   тем, что выбранное копится, а не заменяется. */
+function mnogo(varianty, vybrannye) {
+  const s = el('div', 'seg');
+  const est = new Set((vybrannye || []).map(String));
+  varianty.forEach(([znachenie, podpis]) => {
+    const b = el('button', null, podpis);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(est.has(znachenie)));
+    b.onclick = () => {
+      if (est.has(znachenie)) est.delete(znachenie); else est.add(znachenie);
+      b.setAttribute('aria-pressed', String(est.has(znachenie)));
+    };
+    s.append(b);
+  });
+  s.znachenie = () => Array.from(est);
+  return s;
 }
 
 function pereklyuchatel(varianty, tekushchee) {
@@ -382,7 +426,7 @@ function pustoy() {
   return {
     uid: null, entry_id: '', enabled: true, brand: [], model_kw: [],
     must_kw: [], any_kw: [], exclude_kw: [], sizes: [], colors: [],
-    product: '', gender: '', rework: '', price_mode: '',
+    product: '', gender: '', rework: '', price_mode: '', material: [],
     max_price: 0, min_price: 0, median_eur: 0, alert_ratio: null,
     use_typos: false, catalog_id: null, slabosti: []
   };
@@ -517,6 +561,14 @@ function narisovatRedaktor(gde) {
   P.sizes = spisok(f.sizes, 'M, L, 32/32');
   g5.append(pole('Sizes', P.sizes, 'Empty means any. A listing with no size stated still passes.'));
 
+  P.material = mnogo(SOSTAVY, f.material);
+  g5.append(pole('Fabric', P.material,
+    'Pick as many as you like — any one of them counts. Known only from ' +
+    'the title: the marketplace does not give us the description, and ' +
+    'sellers name the fabric in about 12% of listings. A listing that ' +
+    'says nothing about fabric will NOT come through. Narrower, but ' +
+    'nothing guessed at.'));
+
   P.colors = spisok(f.colors, 'black, navy');
   g5.append(pole('Colours', P.colors, 'Named in the title. Colour from the photo only confirms, never rejects.'));
 
@@ -551,7 +603,15 @@ function narisovatRedaktor(gde) {
   }
 }
 
+/* Поля-списки, которые надо дозабрать перед чтением. Порядок не важен,
+   важна полнота: забыть здесь одно поле — значит терять его молча. */
+const POLYA_SPISKI = ['brand', 'model_kw', 'must_kw', 'any_kw',
+                      'exclude_kw', 'sizes', 'colors'];
+
 function sobrat(P) {
+  POLYA_SPISKI.forEach(imya => {
+    if (P[imya] && P[imya].zafiksirovat) P[imya].zafiksirovat();
+  });
   return {
     uid: TEKUSHCHIY.uid,
     entry_id: P.entry_id.value.trim(),
@@ -566,6 +626,7 @@ function sobrat(P) {
     product: P.product.value,
     gender: P.gender.znachenie(),
     rework: P.rework.znachenie(),
+    material: P.material.znachenie(),
     price_mode: P.price_mode.znachenie(),
     max_price: P.max_price.value || 0,
     min_price: P.min_price.value || 0,
